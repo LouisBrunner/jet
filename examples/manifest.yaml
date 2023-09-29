@@ -1,0 +1,41 @@
+display_information:
+  name: JetTester
+  description: Test app for slack-jet
+  background_color: "#03164f"
+features:
+  bot_user:
+    display_name: "[TEST] Jet"
+    always_online: true
+  shortcuts:
+    - name: "[TEST] Jet Message"
+      type: message
+      callback_id: jet_message
+      description: Test Jet message shortcut
+    - name: "[TEST] Jet Global"
+      type: global
+      callback_id: jet_global
+      description: Test Jet global shortcut
+  slash_commands:
+    - command: /test-jet
+      url: https://poorly-workable-adder.ngrok-free.app/slack
+      description: Test Jet slash command
+      usage_hint: Whatever data you want to send
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - chat:write.public
+      - commands
+      - im:read
+      - mpim:read
+      - groups:read
+      - channels:read
+settings:
+  interactivity:
+    is_enabled: true
+    request_url: https://poorly-workable-adder.ngrok-free.app/slack-interactive
+    message_menu_options_url: https://poorly-workable-adder.ngrok-free.app/slack-select
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

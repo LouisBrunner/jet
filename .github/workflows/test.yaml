@@ -1,0 +1,57 @@
+name: Test & Lint
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  vet:
+    runs-on: ubuntu-latest
+    name: Vet code
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: "^1.20"
+
+      - name: Vet
+        run: |
+          make vet
+        shell: bash
+
+  test:
+    runs-on: ubuntu-latest
+    name: Test
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v4
+        with:
+          go-version: "^1.20"
+
+      - name: Test
+        run: |
+          make test-ci
+        shell: bash
+
+      - name: Publish Test Report
+        uses: mikepenz/action-junit-report@v4
+        if: always()
+        with:
+          report_paths: report.xml
+          check_name: Tests
+
+      - name: Generate Coverage Report
+        run: |
+          make coverage-ci
+        shell: bash
+
+      - name: Publish Coverage Report
+        uses: 5monkeys/cobertura-action@v13
+        with:
+          path: cobertura.xml
+          report_name: Coverage
+          minimum_coverage: 0

@@ -1,0 +1,5 @@
+/report.xml
+/cobertura.xml
+/coverage.*
+/mocks
+.env
