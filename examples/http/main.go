@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"net/http"
 	"os"
 
@@ -11,13 +13,30 @@ import (
 	"github.com/slack-go/slack"
 )
 
-func exampleFlow(ctx jet.Context) (*slack.Blocks, error) {
+func exampleFlow(ctx jet.RenderContext) (*slack.Blocks, error) {
+	value, setValue, err := jet.UseState(ctx, 0)
+	if err != nil {
+		return nil, err
+	}
+	callback, err := jet.UseCallback(ctx, func(ctx context.Context, args slack.BlockAction) error {
+		return setValue(value + 1)
+	})
+	if err != nil {
+		return nil, err
+	}
+
 	return &slack.Blocks{
 		BlockSet: []slack.Block{
 			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", "Hello, world!", false, false),
+				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Counter: %d", value), false, false),
 				nil,
-				nil,
+				slack.NewAccessory(
+					slack.NewButtonBlockElement(
+						callback,
+						"Click Me",
+						slack.NewTextBlockObject("plain_text", "Click Me", false, false),
+					),
+				),
 			),
 		},
 	}, nil
@@ -33,7 +52,7 @@ func work() error {
 	logger.SetLevel(logrus.DebugLevel)
 
 	builder := jet.NewBuilder()
-	f1, err := builder.AddFlow(jet.NewFlow(exampleFlow))
+	f1, err := builder.AddFlow(jet.NewFlow("hello", exampleFlow))
 	if err != nil {
 		return err
 	}
@@ -54,6 +73,9 @@ func work() error {
 		Build(jet.Options{
 			Credentials: jet.Credentials{
 				SigningSecret: os.Getenv("SLACK_SIGNING_SECRET"),
+				GetAccessToken: func(teamID string) (string, error) {
+					return os.Getenv("SLACK_ACCESS_TOKEN"), nil
+				},
 			},
 			Logger: logger,
 		})

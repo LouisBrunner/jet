@@ -19,12 +19,7 @@ func (me *app) makeClientFor(teamID string) (*slack.Client, error) {
 	return slack.New(token), nil
 }
 
-func (me *app) createMessage(ctx context.Context, msg *slack.Msg, in MessageOptions) error {
-	client, err := me.makeClientFor(in.TeamID)
-	if err != nil {
-		return err
-	}
-
+func prepareMessage(msg *slack.Msg, in MessageOptions) []slack.MsgOption {
 	options := []slack.MsgOption{
 		slack.MsgOptionBlocks(msg.Blocks.BlockSet...),
 		slack.MsgOptionMetadata(msg.Metadata),
@@ -43,11 +38,31 @@ func (me *app) createMessage(ctx context.Context, msg *slack.Msg, in MessageOpti
 		options = append(options, slack.MsgOptionPost())
 	}
 
-	_, ts, err := client.PostMessageContext(ctx, in.ChannelID,
-		options...,
-	)
-	if in.ChannelID != "" {
-		fmt.Printf("ts: %q\n", ts) // TODO: return somehow when in.ChannelID != ""
+	return options
+}
+
+func (me *app) createMessage(ctx context.Context, msg *slack.Msg, in MessageOptions) (string, error) {
+	client, err := me.makeClientFor(in.TeamID)
+	if err != nil {
+		return "", err
 	}
+
+	me.LogDebugf("creating message: %+v", msg)
+	_, ts, err := client.PostMessageContext(ctx, in.ChannelID,
+		prepareMessage(msg, in)...,
+	)
+	return ts, err
+}
+
+func (me *app) updateMessage(ctx context.Context, msg *slack.Msg, in MessageOptions) error {
+	client, err := me.makeClientFor(in.TeamID)
+	if err != nil {
+		return err
+	}
+
+	me.LogDebugf("updating message: %+v", msg)
+	_, _, _, err = client.UpdateMessageContext(ctx, in.ChannelID, in.MessageTS,
+		prepareMessage(msg, in)...,
+	)
 	return err
 }

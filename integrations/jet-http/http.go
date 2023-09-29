@@ -79,6 +79,7 @@ func handleSlashCommands(app jet.App) http.Handler {
 			w.WriteHeader(http.StatusInternalServerError)
 			return
 		}
+		app.LogDebugf("slash response json: %+v", string(json))
 
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusOK)

@@ -20,7 +20,7 @@ type App interface {
 }
 
 type app struct {
-	flows            map[*FlowHandle]Flow
+	flows            map[FlowHandle]*Flow
 	slashes          map[string]SlashCommandHandler
 	unknownSlash     SlashCommandHandler
 	globalShortcuts  map[string]ShortcutHandler
@@ -34,6 +34,8 @@ func (me *app) Options() Options {
 }
 
 func (me *app) HandleSlashCommand(ctx context.Context, slash slack.SlashCommand) *slack.Msg {
+	me.LogDebugf("handling slash command: %+v", slash)
+
 	appCtx := &appContext{
 		Context: ctx,
 		app:     me,
@@ -68,6 +70,7 @@ func (me *app) HandleSlashCommand(ctx context.Context, slash slack.SlashCommand)
 }
 
 func (me *app) HandleInteraction(ctx context.Context, interaction slack.InteractionCallback) error {
+	me.LogDebugf("handling interaction: %+v", interaction)
 	switch interaction.Type {
 	case slack.InteractionTypeDialogCancellation:
 		panic("not implemented") // TODO: finish
@@ -80,7 +83,7 @@ func (me *app) HandleInteraction(ctx context.Context, interaction slack.Interact
 	case slack.InteractionTypeMessageAction:
 		return me.handleShortcut(ctx, me.messageShortcuts, interaction)
 	case slack.InteractionTypeBlockActions:
-		panic("not implemented") // TODO: finish
+		return me.handleBlockActions(ctx, interaction)
 	case slack.InteractionTypeBlockSuggestion:
 		panic("not implemented") // TODO: finish
 	case slack.InteractionTypeViewSubmission:
@@ -114,4 +117,51 @@ func (me *app) handleShortcut(ctx context.Context, shortcuts map[string]Shortcut
 		err = cmd(appCtx, interaction)
 	}
 	return err
+}
+
+func (me *app) handleBlockActions(ctx context.Context, interaction slack.InteractionCallback) error {
+	meta, err := deserializeMetadata(&interaction.Message.Metadata)
+	if err != nil {
+		return err
+	}
+	me.LogDebugf("using meta: %+v", meta)
+
+	flow, ok := me.flows[FlowHandle{
+		id: meta.Flow,
+	}]
+	if !ok {
+		return errors.New("unknown flow")
+	}
+
+	rctx, err := newRenderContext(ctx, flow.name, meta)
+	if err != nil {
+		return err
+	}
+	// first, we populate the render context
+	me.LogDebugf("first-pass rendering")
+	_, err = flow.renderBlocks(rctx)
+	if err != nil {
+		return err
+	}
+
+	// then, we trigger the callbacks, updating the internal state
+	for _, action := range interaction.ActionCallback.BlockActions {
+		me.LogDebugf("triggering callback: %s (%+v)", action.ActionID, action)
+		err = rctx.triggerCallback(action.ActionID, *action)
+		if err != nil {
+			return err
+		}
+	}
+
+	// finally, we render the blocks again
+	me.LogDebugf("second-pass rendering")
+	msg, err := flow.renderWith(rctx, meta)
+	if err != nil {
+		return err
+	}
+
+	return me.updateMessage(ctx, msg, MessageOptions{
+		TeamID:      interaction.Team.ID,
+		ResponseURL: interaction.ResponseURL,
+	})
 }

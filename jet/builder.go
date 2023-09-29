@@ -1,8 +1,10 @@
 package jet
 
 import (
-	"github.com/google/uuid"
+	"fmt"
 )
+
+var ErrDuplicateFlowHandle = fmt.Errorf("duplicate flow name")
 
 type AppBuilder interface {
 	AddFlow(flow Flow) (*FlowHandle, error)
@@ -16,7 +18,7 @@ type AppBuilder interface {
 }
 
 type appBuilder struct {
-	flows            map[*FlowHandle]Flow
+	flows            map[FlowHandle]*Flow
 	slashes          map[string]SlashCommandHandler
 	unknownSlash     SlashCommandHandler
 	globalShortcuts  map[string]ShortcutHandler
@@ -26,7 +28,7 @@ type appBuilder struct {
 
 func NewBuilder() AppBuilder {
 	return &appBuilder{
-		flows:            make(map[*FlowHandle]Flow),
+		flows:            make(map[FlowHandle]*Flow),
 		slashes:          make(map[string]SlashCommandHandler),
 		globalShortcuts:  make(map[string]ShortcutHandler),
 		messageShortcuts: make(map[string]ShortcutHandler),
@@ -34,12 +36,15 @@ func NewBuilder() AppBuilder {
 }
 
 func (me *appBuilder) AddFlow(f Flow) (*FlowHandle, error) {
-	fh := &FlowHandle{
-		id: uuid.New().String(),
+	fh := FlowHandle{
+		id: f.name,
 	}
-	// TODO: process f
-	me.flows[fh] = f
-	return fh, nil
+	_, found := me.flows[fh]
+	if found {
+		return nil, ErrDuplicateFlowHandle
+	}
+	me.flows[fh] = &f
+	return &fh, nil
 }
 
 func (me *appBuilder) AddSlash(cmd string, handler SlashCommandHandler) AppBuilder {
