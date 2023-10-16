@@ -7,7 +7,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slack-go/slack v0.12.3
 	github.com/t-yuki/gocover-cobertura v0.0.0-20180217150009-aaee18c8195c
-	github.com/vektra/mockery/v2 v2.35.3
+	github.com/vektra/mockery/v2 v2.35.4
 	gotest.tools/gotestsum v1.11.0
 	honnef.co/go/tools v0.4.6
 )
