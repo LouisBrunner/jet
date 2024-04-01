@@ -50,7 +50,7 @@ jobs:
         shell: bash
 
       - name: Publish Coverage Report
-        uses: 5monkeys/cobertura-action@v13
+        uses: 5monkeys/cobertura-action@v14
         if: ${{ always() && github.event_name == 'pull_request' }}
         with:
           path: cobertura.xml
