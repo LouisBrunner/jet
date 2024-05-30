@@ -9,13 +9,15 @@ import (
 
 type Context interface {
 	context.Context
-	StartFlow(flow *FlowHandle, in MessageOptions) (*slack.Msg, error)
-	StartFlowWithPost(flow *FlowHandle, in MessageOptions) error
+	StartFlow(flow *FlowHandle) (*slack.Msg, error)
+	StartFlowWithPost(flow *FlowHandle) error
+	SlackAPI(teamID string) (*slack.Client, error)
 }
 
 type appContext struct {
 	context.Context
-	app *app
+	app     *app
+	msgOpts MessageOptions
 }
 
 type MessageOptions struct {
@@ -25,6 +27,8 @@ type MessageOptions struct {
 	MessageTS string
 	// when using interactivity
 	ResponseURL string
+	// when using home
+	UserID string
 }
 
 func (me *appContext) renderFlow(flow *FlowHandle) (*Flow, *slack.Msg, error) {
@@ -36,27 +40,31 @@ func (me *appContext) renderFlow(flow *FlowHandle) (*Flow, *slack.Msg, error) {
 	return f, msg, err
 }
 
-func (me *appContext) StartFlow(flow *FlowHandle, in MessageOptions) (*slack.Msg, error) {
+func (me *appContext) StartFlow(flow *FlowHandle) (*slack.Msg, error) {
 	f, msg, err := me.renderFlow(flow)
 	if err != nil {
 		return nil, err
 	}
 	if f.canUpdateWithoutInteraction() {
-		if in.ChannelID == "" {
+		if me.msgOpts.ChannelID == "" {
 			return nil, errors.New("missing ChannelID when using CanUpdateWithoutInteraction")
 		}
-		in.ResponseURL = ""
-		_, err := me.app.createMessage(me.Context, msg, in)
+		me.msgOpts.ResponseURL = ""
+		_, err := me.app.createMessage(me.Context, msg, me.msgOpts)
 		return nil, err
 	}
 	return msg, nil
 }
 
-func (me *appContext) StartFlowWithPost(flow *FlowHandle, in MessageOptions) error {
+func (me *appContext) StartFlowWithPost(flow *FlowHandle) error {
 	_, msg, err := me.renderFlow(flow)
 	if err != nil {
 		return err
 	}
-	_, err = me.app.createMessage(me.Context, msg, in)
+	_, err = me.app.createMessage(me.Context, msg, me.msgOpts)
 	return err
+}
+
+func (me *appContext) SlackAPI(teamID string) (*slack.Client, error) {
+	return me.app.makeClientFor(teamID)
 }

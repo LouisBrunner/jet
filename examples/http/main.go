@@ -58,11 +58,7 @@ func work() error {
 	}
 	app := builder.
 		AddSlash("/test-jet", func(ctx jet.Context, args slack.SlashCommand) (*slack.Msg, error) {
-			return ctx.StartFlow(f1, jet.MessageOptions{
-				TeamID:      args.TeamID,
-				ChannelID:   args.ChannelID,
-				ResponseURL: args.ResponseURL,
-			})
+			return ctx.StartFlow(f1)
 		}).
 		AddGlobalShortcut("jet_global", func(ctx jet.Context, args slack.InteractionCallback) error {
 			panic("modal")

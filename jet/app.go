@@ -9,12 +9,15 @@ import (
 	"github.com/slack-go/slack"
 )
 
+type HomeUpdater func(ctx Context) (*slack.Msg, error)
+
 type App interface {
 	HandleSlashCommand(ctx context.Context, slash slack.SlashCommand) *slack.Msg
 	HandleInteraction(ctx context.Context, interaction slack.InteractionCallback) error
 	// TODO: select menu
 	// TODO: workflow step
 	// TODO: bot events (e.g. reaction)
+	UpdateHome(ctx context.Context, workspaceID, userID string, updater HomeUpdater) error
 	Options() Options
 
 	FinalizeOAuth(ctx context.Context, code, state string) http.Handler
@@ -43,6 +46,11 @@ func (me *app) HandleSlashCommand(ctx context.Context, slash slack.SlashCommand)
 	appCtx := &appContext{
 		Context: ctx,
 		app:     me,
+		msgOpts: MessageOptions{
+			TeamID:      slash.TeamID,
+			ChannelID:   slash.ChannelID,
+			ResponseURL: slash.ResponseURL,
+		},
 	}
 
 	var res *slack.Msg
@@ -107,6 +115,10 @@ func (me *app) handleShortcut(ctx context.Context, shortcuts map[string]Shortcut
 	appCtx := &appContext{
 		Context: ctx,
 		app:     me,
+		msgOpts: MessageOptions{
+			TeamID:      interaction.Team.ID,
+			ResponseURL: interaction.ResponseURL,
+		},
 	}
 
 	var err error
@@ -124,7 +136,7 @@ func (me *app) handleShortcut(ctx context.Context, shortcuts map[string]Shortcut
 }
 
 func (me *app) handleBlockActions(ctx context.Context, interaction slack.InteractionCallback) error {
-	meta, err := deserializeMetadata(&interaction.Message.Metadata)
+	meta, err := deserializeMetadata(&interaction.Message.Metadata, interaction.View.PrivateMetadata)
 	if err != nil {
 		return err
 	}
@@ -164,6 +176,12 @@ func (me *app) handleBlockActions(ctx context.Context, interaction slack.Interac
 		return err
 	}
 
+	if interaction.View.Type == slack.VTHomeTab {
+		return me.publishView(ctx, msg, MessageOptions{
+			TeamID: interaction.Team.ID,
+			UserID: interaction.User.ID,
+		})
+	}
 	return me.updateMessage(ctx, msg, MessageOptions{
 		TeamID:      interaction.Team.ID,
 		ResponseURL: interaction.ResponseURL,
@@ -203,4 +221,22 @@ func (me *app) FinalizeOAuth(ctx context.Context, code, state string) http.Handl
 	}
 
 	return cfg.RenderSuccessPage
+}
+
+func (me *app) UpdateHome(ctx context.Context, workspaceID, userID string, updater HomeUpdater) error {
+	appCtx := &appContext{
+		Context: ctx,
+		app:     me,
+		msgOpts: MessageOptions{
+			TeamID: workspaceID,
+			UserID: userID,
+		},
+	}
+
+	msg, err := updater(appCtx)
+	if err != nil {
+		return err
+	}
+
+	return me.publishView(ctx, msg, appCtx.msgOpts)
 }

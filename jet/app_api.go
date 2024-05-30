@@ -2,6 +2,7 @@ package jet
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -65,6 +66,26 @@ func (me *app) updateMessage(ctx context.Context, msg *slack.Msg, in MessageOpti
 	_, _, _, err = client.UpdateMessageContext(ctx, in.ChannelID, in.MessageTS,
 		prepareMessage(msg, in)...,
 	)
+	return err
+}
+
+func (me *app) publishView(ctx context.Context, msg *slack.Msg, in MessageOptions) error {
+	client, err := me.makeClientFor(in.TeamID)
+	if err != nil {
+		return err
+	}
+
+	meta, err := json.Marshal(msg.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	me.LogDebugf("publishing view: %+v", msg)
+	_, err = client.PublishViewContext(ctx, in.UserID, slack.HomeTabViewRequest{
+		Type:            slack.VTHomeTab,
+		Blocks:          msg.Blocks,
+		PrivateMetadata: string(meta),
+	}, "")
 	return err
 }
 

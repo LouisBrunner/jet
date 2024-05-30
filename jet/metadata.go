@@ -18,10 +18,23 @@ type slackMetadataJet struct {
 	Original slack.SlackMetadata `json:"-"`
 }
 
-func deserializeMetadata(meta *slack.SlackMetadata) (*slackMetadataJet, error) {
+func deserializeMetadata(meta *slack.SlackMetadata, privMeta string) (*slackMetadataJet, error) {
 	jetEntryRaw, found := meta.EventPayload[jetMetadataEntry]
 	if !found {
-		return nil, fmt.Errorf("missing jet metadata")
+		if privMeta == "" {
+			return nil, fmt.Errorf("missing jet metadata")
+		}
+
+		var wrappedMeta slack.SlackMetadata
+		err := json.Unmarshal([]byte(privMeta), &wrappedMeta)
+		if err != nil {
+			return nil, fmt.Errorf("failed to unmarshal jet metadata: %w", err)
+		}
+		jetEntryRaw, found = wrappedMeta.EventPayload[jetMetadataEntry]
+		if !found {
+			return nil, fmt.Errorf("missing jet metadata")
+		}
+		meta = &wrappedMeta
 	}
 	jetEntryJSON, err := json.Marshal(jetEntryRaw)
 	if err != nil {
