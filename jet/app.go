@@ -3,6 +3,8 @@ package jet
 import (
 	"context"
 	"errors"
+	"fmt"
+	"net/http"
 
 	"github.com/slack-go/slack"
 )
@@ -14,6 +16,8 @@ type App interface {
 	// TODO: workflow step
 	// TODO: bot events (e.g. reaction)
 	Options() Options
+
+	FinalizeOAuth(ctx context.Context, code, state string) http.Handler
 
 	LogDebugf(format string, v ...interface{})
 	LogErrorf(format string, v ...interface{})
@@ -164,4 +168,39 @@ func (me *app) handleBlockActions(ctx context.Context, interaction slack.Interac
 		TeamID:      interaction.Team.ID,
 		ResponseURL: interaction.ResponseURL,
 	})
+}
+
+func (me *app) FinalizeOAuth(ctx context.Context, code, state string) http.Handler {
+	cfg := me.opts.OAuthConfig
+
+	if cfg == nil {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusNotImplemented)
+			w.Write([]byte("OAuth is not configured correctly, please provide `OAuthConfig` to `jet.NewBuilder().Build()`"))
+		})
+	}
+
+	if code == "" {
+		err := fmt.Errorf("missing code in oauth request (slack issue)")
+		me.LogErrorf("failed to handle oauth: %+v", err)
+		return cfg.RenderErrorPage(err)
+	}
+
+	resp, err := me.tokenExchange(ctx, code, cfg.ClientID, cfg.ClientSecret)
+	if err != nil {
+		me.LogErrorf("failed to exchange code for token: %+v", err)
+		return cfg.RenderErrorPage(err)
+	}
+
+	err = cfg.OnSuccess(OAuthSuccessData{
+		TeamID:      resp.Team.ID,
+		AccessToken: resp.AccessToken,
+		State:       state,
+	})
+	if err != nil {
+		me.LogErrorf("failed to handle oauth: %+v", err)
+		return cfg.RenderErrorPage(err)
+	}
+
+	return cfg.RenderSuccessPage
 }

@@ -1,6 +1,6 @@
 display_information:
   name: JetTester
-  description: Test app for slack-jet
+  description: Test app for jet
   background_color: "#03164f"
 features:
   bot_user:

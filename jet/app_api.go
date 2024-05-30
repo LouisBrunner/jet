@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/http"
 
 	"github.com/slack-go/slack"
 )
@@ -65,4 +66,15 @@ func (me *app) updateMessage(ctx context.Context, msg *slack.Msg, in MessageOpti
 		prepareMessage(msg, in)...,
 	)
 	return err
+}
+
+func (me *app) tokenExchange(ctx context.Context, code, clientID, clientSecret string) (*slack.OAuthV2Response, error) {
+	resp, err := slack.GetOAuthV2Response(http.DefaultClient, clientID, clientSecret, code, "")
+	if err != nil {
+		return nil, fmt.Errorf("failed to exchange code for token: %w", err)
+	}
+	if !resp.Ok {
+		return nil, fmt.Errorf("failed to exchange code for token: %s", resp.Error)
+	}
+	return resp, nil
 }

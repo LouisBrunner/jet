@@ -7,8 +7,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/LouisBrunner/slack-jet/integrations/common"
-	"github.com/LouisBrunner/slack-jet/jet"
+	"github.com/LouisBrunner/jet/integrations/common"
+	"github.com/LouisBrunner/jet/jet"
 	"github.com/slack-go/slack"
 )
 
@@ -48,6 +48,7 @@ func New(app jet.App) Handlers {
 		SlashCommands: handleSlashCommands(app),
 		Interactivity: handleInteractivity(app),
 		SelectMenus:   handleSelectMenus(app),
+		OAuth:         handleOAuth(app),
 	}
 }
 
@@ -135,5 +136,20 @@ func handleSelectMenus(app jet.App) http.Handler {
 		a, _ := io.ReadAll(r.Body)
 		fmt.Printf("select menu: %+v\n", r.Header)
 		fmt.Printf("select menu: %+v\n", string(a))
+	})
+}
+
+func handleOAuth(app jet.App) http.Handler {
+	if app.Options().OAuthConfig == nil {
+		return nil
+	}
+
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		app.LogDebugf("oauth: %+v", r.Header)
+
+		state := r.URL.Query().Get("state")
+		code := r.URL.Query().Get("code")
+
+		app.FinalizeOAuth(r.Context(), code, state).ServeHTTP(w, r)
 	})
 }

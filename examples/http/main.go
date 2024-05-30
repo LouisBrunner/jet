@@ -6,8 +6,8 @@ import (
 	"net/http"
 	"os"
 
-	jethttp "github.com/LouisBrunner/slack-jet/integrations/jet-http"
-	"github.com/LouisBrunner/slack-jet/jet"
+	jethttp "github.com/LouisBrunner/jet/integrations/jet-http"
+	"github.com/LouisBrunner/jet/jet"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
 	"github.com/slack-go/slack"

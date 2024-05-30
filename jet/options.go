@@ -1,6 +1,8 @@
 package jet
 
 import (
+	"net/http"
+
 	"github.com/slack-go/slack"
 )
 
@@ -18,10 +20,36 @@ type Credentials struct {
 	GetAccessToken AccessTokenRetriever
 }
 
+type OAuthSuccessData struct {
+	State       string
+	TeamID      string
+	AccessToken string
+}
+
+type OAuthSuccessHandler func(data OAuthSuccessData) error
+
+type OAuthRenderError func(err error) http.Handler
+
+type OAuthConfig struct {
+	// used to exchange the temporary code for an access token
+	ClientID string
+	// same as above
+	ClientSecret string
+
+	// called if the OAuth flow is successful
+	OnSuccess OAuthSuccessHandler
+
+	// render the page that will be displayed to the user after the OAuth flow is successful
+	RenderSuccessPage http.Handler
+	// render the page that will be displayed to the user if the OAuth flow fails for any reason
+	RenderErrorPage OAuthRenderError
+}
+
 type ErrorFormatter func(error) slack.Msg
 
 type Options struct {
 	Credentials    Credentials
+	OAuthConfig    *OAuthConfig
 	Logger         Logger
 	ErrorFormatter ErrorFormatter
 }

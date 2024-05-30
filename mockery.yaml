@@ -6,6 +6,6 @@ outpkg: "{{.PackageName}}"
 filename: "{{.InterfaceName}}.go"
 all: True
 packages:
-  github.com/LouisBrunner/slack-jet:
+  github.com/LouisBrunner/jet:
     config:
       recursive: True

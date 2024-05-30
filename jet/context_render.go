@@ -133,19 +133,18 @@ func (me *renderContext) fetchHook(kind string) (*hookData, error) {
 }
 
 func (me *renderContext) finish() error {
-	if me.isInitial {
-		return nil
-	}
-	if len(me.expectedHooks) != len(me.addedHooks) {
-		expected := make([]string, len(me.expectedHooks))
-		for i, hook := range me.expectedHooks {
-			expected[i] = hook.kind
+	if !me.isInitial {
+		if len(me.expectedHooks) != len(me.addedHooks) {
+			expected := make([]string, len(me.expectedHooks))
+			for i, hook := range me.expectedHooks {
+				expected[i] = hook.kind
+			}
+			added := make([]string, len(me.addedHooks))
+			for i, hook := range me.addedHooks {
+				added[i] = hook.kind
+			}
+			return fmt.Errorf("must use the same amount and type of hooks in all renders: %+v vs %+v", expected, added)
 		}
-		added := make([]string, len(me.addedHooks))
-		for i, hook := range me.addedHooks {
-			added[i] = hook.kind
-		}
-		return fmt.Errorf("must use the same amount and type of hooks in all renders: %+v vs %+v", expected, added)
 	}
 	me.isInitial = false
 	me.expectedHooks = me.addedHooks
