@@ -46,10 +46,14 @@ func (me *app) HandleSlashCommand(ctx context.Context, slash slack.SlashCommand)
 	appCtx := &appContext{
 		Context: ctx,
 		app:     me,
-		msgOpts: MessageOptions{
+		msgOpts: messageOptions{
 			TeamID:      slash.TeamID,
 			ChannelID:   slash.ChannelID,
 			ResponseURL: slash.ResponseURL,
+		},
+		source: SourceInfo{
+			TeamID: slash.TeamID,
+			UserID: slash.UserID,
 		},
 	}
 
@@ -115,9 +119,13 @@ func (me *app) handleShortcut(ctx context.Context, shortcuts map[string]Shortcut
 	appCtx := &appContext{
 		Context: ctx,
 		app:     me,
-		msgOpts: MessageOptions{
+		msgOpts: messageOptions{
 			TeamID:      interaction.Team.ID,
 			ResponseURL: interaction.ResponseURL,
+		},
+		source: SourceInfo{
+			TeamID: interaction.Team.ID,
+			UserID: interaction.User.ID,
 		},
 	}
 
@@ -149,7 +157,10 @@ func (me *app) handleBlockActions(ctx context.Context, interaction slack.Interac
 		return errors.New("unknown flow")
 	}
 
-	rctx, err := newRenderContext(ctx, flow.name, meta)
+	rctx, err := newRenderContext(ctx, flow.name, nil, meta, SourceInfo{
+		TeamID: interaction.Team.ID,
+		UserID: interaction.User.ID,
+	})
 	if err != nil {
 		return err
 	}
@@ -177,12 +188,12 @@ func (me *app) handleBlockActions(ctx context.Context, interaction slack.Interac
 	}
 
 	if interaction.View.Type == slack.VTHomeTab {
-		return me.publishView(ctx, msg, MessageOptions{
+		return me.publishView(ctx, msg, messageOptions{
 			TeamID: interaction.Team.ID,
 			UserID: interaction.User.ID,
 		})
 	}
-	return me.updateMessage(ctx, msg, MessageOptions{
+	return me.updateMessage(ctx, msg, messageOptions{
 		TeamID:      interaction.Team.ID,
 		ResponseURL: interaction.ResponseURL,
 	})
@@ -227,7 +238,11 @@ func (me *app) UpdateHome(ctx context.Context, workspaceID, userID string, updat
 	appCtx := &appContext{
 		Context: ctx,
 		app:     me,
-		msgOpts: MessageOptions{
+		msgOpts: messageOptions{
+			TeamID: workspaceID,
+			UserID: userID,
+		},
+		source: SourceInfo{
 			TeamID: workspaceID,
 			UserID: userID,
 		},

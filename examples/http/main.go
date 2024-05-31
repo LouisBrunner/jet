@@ -13,7 +13,7 @@ import (
 	"github.com/slack-go/slack"
 )
 
-func exampleFlow(ctx jet.RenderContext) (*slack.Blocks, error) {
+func exampleFlow(ctx jet.RenderContext, props jet.FlowProps) (*slack.Blocks, error) {
 	value, setValue, err := jet.UseState(ctx, 0)
 	if err != nil {
 		return nil, err
@@ -52,13 +52,13 @@ func work() error {
 	logger.SetLevel(logrus.DebugLevel)
 
 	builder := jet.NewBuilder()
-	f1, err := builder.AddFlow(jet.NewFlow("hello", exampleFlow))
+	f1, err := builder.AddFlow(jet.NewFlow("hello", exampleFlow, nil))
 	if err != nil {
 		return err
 	}
 	app := builder.
 		AddSlash("/test-jet", func(ctx jet.Context, args slack.SlashCommand) (*slack.Msg, error) {
-			return ctx.StartFlow(f1)
+			return ctx.StartFlow(f1, nil)
 		}).
 		AddGlobalShortcut("jet_global", func(ctx jet.Context, args slack.InteractionCallback) error {
 			panic("modal")

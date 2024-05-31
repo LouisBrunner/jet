@@ -8,8 +8,14 @@ import (
 	"github.com/slack-go/slack"
 )
 
+type SourceInfo struct {
+	TeamID string
+	UserID string
+}
+
 type RenderContext interface {
 	context.Context
+	Source() SourceInfo
 	addState(initial func() (json.RawMessage, error)) (json.RawMessage, func(newValue json.RawMessage), error)
 	addCallback(callback Callback) (string, error)
 }
@@ -30,9 +36,15 @@ type renderContext struct {
 	hookIdx       int
 	expectedHooks []*hookData
 	addedHooks    []*hookData
+	props         FlowProps
+	source        SourceInfo
 }
 
-func newRenderContext(ctx context.Context, name string, metadata *slackMetadataJet) (*renderContext, error) {
+func (me *renderContext) Source() SourceInfo {
+	return me.source
+}
+
+func newRenderContext(ctx context.Context, name string, props FlowProps, metadata *slackMetadataJet, source SourceInfo) (*renderContext, error) {
 	var expectedHooks []*hookData
 	if metadata != nil {
 		expectedHooks = make([]*hookData, len(metadata.Hooks))
@@ -43,12 +55,15 @@ func newRenderContext(ctx context.Context, name string, metadata *slackMetadataJ
 				callbackID: hook.CallbackID,
 			}
 		}
+		props = metadata.Props
 	}
 	return &renderContext{
 		Context:       ctx,
 		name:          name,
 		isInitial:     metadata == nil,
 		expectedHooks: expectedHooks,
+		props:         props,
+		source:        source,
 	}, nil
 }
 

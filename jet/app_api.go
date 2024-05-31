@@ -21,7 +21,7 @@ func (me *app) makeClientFor(teamID string) (*slack.Client, error) {
 	return slack.New(token), nil
 }
 
-func prepareMessage(msg *slack.Msg, in MessageOptions) []slack.MsgOption {
+func prepareMessage(msg *slack.Msg, in messageOptions) []slack.MsgOption {
 	options := []slack.MsgOption{
 		slack.MsgOptionBlocks(msg.Blocks.BlockSet...),
 		slack.MsgOptionMetadata(msg.Metadata),
@@ -43,7 +43,7 @@ func prepareMessage(msg *slack.Msg, in MessageOptions) []slack.MsgOption {
 	return options
 }
 
-func (me *app) createMessage(ctx context.Context, msg *slack.Msg, in MessageOptions) (string, error) {
+func (me *app) createMessage(ctx context.Context, msg *slack.Msg, in messageOptions) (string, error) {
 	client, err := me.makeClientFor(in.TeamID)
 	if err != nil {
 		return "", err
@@ -56,7 +56,7 @@ func (me *app) createMessage(ctx context.Context, msg *slack.Msg, in MessageOpti
 	return ts, err
 }
 
-func (me *app) updateMessage(ctx context.Context, msg *slack.Msg, in MessageOptions) error {
+func (me *app) updateMessage(ctx context.Context, msg *slack.Msg, in messageOptions) error {
 	client, err := me.makeClientFor(in.TeamID)
 	if err != nil {
 		return err
@@ -69,7 +69,7 @@ func (me *app) updateMessage(ctx context.Context, msg *slack.Msg, in MessageOpti
 	return err
 }
 
-func (me *app) publishView(ctx context.Context, msg *slack.Msg, in MessageOptions) error {
+func (me *app) publishView(ctx context.Context, msg *slack.Msg, in messageOptions) error {
 	client, err := me.makeClientFor(in.TeamID)
 	if err != nil {
 		return err

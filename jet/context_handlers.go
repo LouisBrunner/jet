@@ -7,20 +7,23 @@ import (
 	"github.com/slack-go/slack"
 )
 
+type FlowProps map[string]interface{}
+
 type Context interface {
 	context.Context
-	StartFlow(flow *FlowHandle) (*slack.Msg, error)
-	StartFlowWithPost(flow *FlowHandle) error
+	StartFlow(flow *FlowHandle, props FlowProps) (*slack.Msg, error)
+	StartFlowAndPost(flow *FlowHandle, props FlowProps) error
 	SlackAPI(teamID string) (*slack.Client, error)
 }
 
 type appContext struct {
 	context.Context
 	app     *app
-	msgOpts MessageOptions
+	msgOpts messageOptions
+	source  SourceInfo
 }
 
-type MessageOptions struct {
+type messageOptions struct {
 	TeamID string
 	// when using {post|update}Message (initial messages/background updates)
 	ChannelID string
@@ -31,17 +34,17 @@ type MessageOptions struct {
 	UserID string
 }
 
-func (me *appContext) renderFlow(flow *FlowHandle) (*Flow, *slack.Msg, error) {
+func (me *appContext) renderFlow(flow *FlowHandle, props FlowProps) (*Flow, *slack.Msg, error) {
 	f, ok := me.app.flows[*flow]
 	if !ok {
 		return nil, nil, errors.New("unknown flow")
 	}
-	msg, err := f.renderFresh(me.Context)
+	msg, err := f.renderFresh(me.Context, props, me.source)
 	return f, msg, err
 }
 
-func (me *appContext) StartFlow(flow *FlowHandle) (*slack.Msg, error) {
-	f, msg, err := me.renderFlow(flow)
+func (me *appContext) StartFlow(flow *FlowHandle, props FlowProps) (*slack.Msg, error) {
+	f, msg, err := me.renderFlow(flow, props)
 	if err != nil {
 		return nil, err
 	}
@@ -56,8 +59,8 @@ func (me *appContext) StartFlow(flow *FlowHandle) (*slack.Msg, error) {
 	return msg, nil
 }
 
-func (me *appContext) StartFlowWithPost(flow *FlowHandle) error {
-	_, msg, err := me.renderFlow(flow)
+func (me *appContext) StartFlowAndPost(flow *FlowHandle, props FlowProps) error {
+	_, msg, err := me.renderFlow(flow, props)
 	if err != nil {
 		return err
 	}

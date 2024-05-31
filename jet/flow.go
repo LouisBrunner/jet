@@ -2,6 +2,7 @@ package jet
 
 import (
 	"context"
+	"maps"
 
 	"github.com/slack-go/slack"
 )
@@ -10,7 +11,7 @@ type FlowHandle struct {
 	id string
 }
 
-type FlowRenderer func(ctx RenderContext) (*slack.Blocks, error)
+type FlowRenderer func(ctx RenderContext, props FlowProps) (*slack.Blocks, error)
 
 type FlowOptions struct {
 	CanUpdateWithoutInteraction bool
@@ -22,10 +23,10 @@ type Flow struct {
 	renderFn                       FlowRenderer
 }
 
-func NewFlow(name string, render FlowRenderer, opts ...FlowOptions) Flow {
+func NewFlow(name string, render FlowRenderer, opts *FlowOptions) Flow {
 	opt := FlowOptions{}
-	if len(opts) > 0 {
-		opt = opts[0]
+	if opts != nil {
+		opt = *opts
 	}
 	return Flow{
 		name:                           name,
@@ -38,8 +39,8 @@ func (me *Flow) canUpdateWithoutInteraction() bool {
 	return me.canUpdateWithoutInteractionOpt
 }
 
-func (me *Flow) renderFresh(ctx context.Context) (*slack.Msg, error) {
-	rctx, err := newRenderContext(ctx, me.name, nil)
+func (me *Flow) renderFresh(ctx context.Context, props FlowProps, source SourceInfo) (*slack.Msg, error) {
+	rctx, err := newRenderContext(ctx, me.name, props, nil, source)
 	if err != nil {
 		return nil, err
 	}
@@ -60,7 +61,11 @@ func (me *Flow) renderWith(rctx *renderContext, metadata *slackMetadataJet) (*sl
 }
 
 func (me *Flow) renderBlocks(rctx *renderContext) (*slack.Blocks, error) {
-	blocks, err := me.renderFn(rctx)
+	props := maps.Clone(rctx.props)
+	if props == nil {
+		props = make(FlowProps)
+	}
+	blocks, err := me.renderFn(rctx, props)
 	if err != nil {
 		return nil, err
 	}

@@ -14,6 +14,7 @@ const (
 type slackMetadataJet struct {
 	Flow  string              `json:"f" mapstructure:"f"`
 	Hooks []slackMetadataHook `json:"h,omitempty" mapstructure:"h"`
+	Props FlowProps           `json:"p,omitempty" mapstructure:"p"`
 
 	Original slack.SlackMetadata `json:"-"`
 }
