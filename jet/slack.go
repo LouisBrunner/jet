@@ -28,6 +28,10 @@ func prepareMessage(msg *slack.Msg, in messageOptions) []slack.MsgOption {
 		slack.MsgOptionText(msg.Text, false),
 	}
 
+	if in.ResponseURL == "" {
+		return options
+	}
+
 	if msg.ReplaceOriginal {
 		options = append(options, slack.MsgOptionReplaceOriginal(in.ResponseURL))
 	}
@@ -36,11 +40,29 @@ func prepareMessage(msg *slack.Msg, in messageOptions) []slack.MsgOption {
 	}
 	options = append(options, slack.MsgOptionResponseURL(in.ResponseURL, msg.ResponseType))
 
-	if in.ResponseURL == "" {
-		options = append(options, slack.MsgOptionPost())
+	return options
+}
+
+func (me *app) getMessage(ctx context.Context, teamID, channelID, messageTS string) (*slack.Msg, error) {
+	client, err := me.makeClientFor(teamID)
+	if err != nil {
+		return nil, err
 	}
 
-	return options
+	res, err := client.GetConversationHistoryContext(ctx, &slack.GetConversationHistoryParameters{
+		ChannelID:          channelID,
+		Inclusive:          true,
+		Latest:             messageTS,
+		Limit:              1,
+		IncludeAllMetadata: true,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get message: %w", err)
+	}
+	if len(res.Messages) == 0 {
+		return nil, fmt.Errorf("no messages found")
+	}
+	return &res.Messages[0].Msg, nil
 }
 
 func (me *app) createMessage(ctx context.Context, msg *slack.Msg, in messageOptions) (string, error) {

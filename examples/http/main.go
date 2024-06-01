@@ -13,7 +13,7 @@ import (
 	"github.com/slack-go/slack"
 )
 
-func exampleFlow(ctx jet.RenderContext, props jet.FlowProps) (*slack.Blocks, error) {
+func exampleFlow(ctx jet.RenderContext, props jet.FlowProps) (*jet.RenderedFlow, error) {
 	value, setValue, err := jet.UseState(ctx, 0)
 	if err != nil {
 		return nil, err
@@ -25,19 +25,22 @@ func exampleFlow(ctx jet.RenderContext, props jet.FlowProps) (*slack.Blocks, err
 		return nil, err
 	}
 
-	return &slack.Blocks{
-		BlockSet: []slack.Block{
-			slack.NewSectionBlock(
-				slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Counter: %d", value), false, false),
-				nil,
-				slack.NewAccessory(
-					slack.NewButtonBlockElement(
-						callback,
-						"Click Me",
-						slack.NewTextBlockObject("plain_text", "Click Me", false, false),
+	return &jet.RenderedFlow{
+		Text: fmt.Sprintf("Counter: %d", value),
+		Blocks: slack.Blocks{
+			BlockSet: []slack.Block{
+				slack.NewSectionBlock(
+					slack.NewTextBlockObject("mrkdwn", fmt.Sprintf("Counter: %d", value), false, false),
+					nil,
+					slack.NewAccessory(
+						slack.NewButtonBlockElement(
+							callback,
+							"Click Me",
+							slack.NewTextBlockObject("plain_text", "Click Me", false, false),
+						),
 					),
 				),
-			),
+			},
 		},
 	}, nil
 }

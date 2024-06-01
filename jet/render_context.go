@@ -16,8 +16,9 @@ type SourceInfo struct {
 type RenderContext interface {
 	context.Context
 	Source() SourceInfo
-	addState(initial func() (json.RawMessage, error)) (json.RawMessage, func(newValue json.RawMessage), error)
+	addState(initial func() (json.RawMessage, error)) (int, json.RawMessage, func(newValue json.RawMessage), error)
 	addCallback(callback Callback) (string, error)
+	getAsyncData() asyncStateData
 }
 
 type hookData struct {
@@ -38,13 +39,18 @@ type renderContext struct {
 	addedHooks    []*hookData
 	props         FlowProps
 	source        SourceInfo
+	async         asyncStateData
 }
 
 func (me *renderContext) Source() SourceInfo {
 	return me.source
 }
 
-func newRenderContext(ctx context.Context, name string, props FlowProps, metadata *slackMetadataJet, source SourceInfo) (*renderContext, error) {
+func (me *renderContext) getAsyncData() asyncStateData {
+	return me.async
+}
+
+func newRenderContext(ctx context.Context, name string, props FlowProps, metadata *slackMetadataJet, source SourceInfo, async asyncStateData) (*renderContext, error) {
 	var expectedHooks []*hookData
 	if metadata != nil {
 		expectedHooks = make([]*hookData, len(metadata.Hooks))
@@ -64,6 +70,7 @@ func newRenderContext(ctx context.Context, name string, props FlowProps, metadat
 		expectedHooks: expectedHooks,
 		props:         props,
 		source:        source,
+		async:         async,
 	}, nil
 }
 
@@ -73,7 +80,7 @@ type slackMetadataHook struct {
 	CallbackID string          `json:"cb,omitempty" mapstructure:"cb"`
 }
 
-func (me *renderContext) serialize() []slackMetadataHook {
+func (me *renderContext) serializeHooks() []slackMetadataHook {
 	hooks := make([]slackMetadataHook, len(me.expectedHooks))
 	for i, hook := range me.expectedHooks {
 		hooks[i] = slackMetadataHook{
@@ -90,31 +97,43 @@ const (
 	hookCallback = "callback"
 )
 
-func (me *renderContext) addState(initial func() (json.RawMessage, error)) (json.RawMessage, func(newValue json.RawMessage), error) {
-	prev, err := me.fetchHook(hookState)
+func (me *renderContext) addState(initial func() (json.RawMessage, error)) (int, json.RawMessage, func(newValue json.RawMessage), error) {
+	id, prev, err := me.fetchHook(hookState)
 	if err != nil {
-		return nil, nil, err
+		return 0, nil, nil, err
 	}
 	if me.isInitial {
 		prev.data, err = initial()
 		if err != nil {
-			return nil, nil, err
+			return 0, nil, nil, err
 		}
 	}
 	me.addedHooks = append(me.addedHooks, prev)
-	return prev.data, func(newValue json.RawMessage) {
+	return id, prev.data, func(newValue json.RawMessage) {
 		prev.data = newValue
 	}, nil
 }
 
+func (me *renderContext) updateState(idx int, newValue json.RawMessage) error {
+	if idx >= len(me.expectedHooks) {
+		return fmt.Errorf("unknown state: %d", idx)
+	}
+	hookData := me.expectedHooks[idx]
+	if hookData.kind != hookState {
+		return fmt.Errorf("hook %d is not a state", idx)
+	}
+	me.expectedHooks[idx].data = newValue
+	return nil
+}
+
 func (me *renderContext) addCallback(callback Callback) (string, error) {
-	prev, err := me.fetchHook(hookCallback)
+	id, prev, err := me.fetchHook(hookCallback)
 	if err != nil {
 		return "", err
 	}
 	prev.callback = callback
 	if me.isInitial {
-		prev.callbackID = fmt.Sprintf("jet_%s_cb_%x", me.name, me.hookIdx)
+		prev.callbackID = fmt.Sprintf("jet_%s_cb_%x", me.name, id)
 	}
 	me.addedHooks = append(me.addedHooks, prev)
 	return prev.callbackID, nil
@@ -130,21 +149,21 @@ func (me *renderContext) triggerCallback(callbackID string, action slack.BlockAc
 	return fmt.Errorf("unknown callback: %s", callbackID)
 }
 
-func (me *renderContext) fetchHook(kind string) (*hookData, error) {
+func (me *renderContext) fetchHook(kind string) (int, *hookData, error) {
 	currentIdx := me.hookIdx
 	me.hookIdx += 1
 	if me.isInitial {
-		return &hookData{kind: kind}, nil
+		return currentIdx, &hookData{kind: kind}, nil
 	}
 
 	if currentIdx >= len(me.expectedHooks) {
-		return nil, fmt.Errorf("must use the same amount and type of hooks in all renders, %d vs %d", currentIdx+1, len(me.expectedHooks))
+		return 0, nil, fmt.Errorf("must use the same amount and type of hooks in all renders, %d vs %d", currentIdx+1, len(me.expectedHooks))
 	}
 	expected := me.expectedHooks[currentIdx]
 	if expected.kind != kind {
-		return nil, fmt.Errorf("must use the same amount and type of hooks in all renders, %d is different: %+v vs %+v", currentIdx+1, expected.kind, kind)
+		return 0, nil, fmt.Errorf("must use the same amount and type of hooks in all renders, %d is different: %+v vs %+v", currentIdx+1, expected.kind, kind)
 	}
-	return expected, nil
+	return currentIdx, expected, nil
 }
 
 func (me *renderContext) finish() error {

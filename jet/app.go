@@ -2,6 +2,7 @@ package jet
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -18,12 +19,15 @@ type App interface {
 	// TODO: workflow step
 	// TODO: bot events (e.g. reaction)
 	UpdateHome(ctx context.Context, workspaceID, userID string, updater HomeUpdater) error
+	SlackAPI(teamID string) (*slack.Client, error)
 	Options() Options
 
 	FinalizeOAuth(ctx context.Context, code, state string) http.Handler
 
 	LogDebugf(format string, v ...interface{})
 	LogErrorf(format string, v ...interface{})
+
+	handleAsyncData(ctx context.Context, data asyncStateData, value json.RawMessage) error
 }
 
 type app struct {
@@ -148,22 +152,67 @@ func (me *app) handleBlockActions(ctx context.Context, interaction slack.Interac
 	if err != nil {
 		return err
 	}
-	me.LogDebugf("using meta: %+v", meta)
+
+	src := SourceInfo{
+		TeamID: interaction.Team.ID,
+		UserID: interaction.User.ID,
+	}
+
+	return me.multiStageRender(ctx, multiStageOptions{
+		meta:   meta,
+		src:    src,
+		isHome: interaction.View.Type == slack.VTHomeTab,
+		msgOpts: messageOptions{
+			TeamID:      interaction.Team.ID,
+			ResponseURL: interaction.ResponseURL,
+		},
+		async: asyncStateData{
+			ChannelID: interaction.Channel.ID,
+			MessageTS: interaction.Message.Timestamp,
+		},
+		betweenStages: func(rctx *renderContext) error {
+			for _, action := range interaction.ActionCallback.BlockActions {
+				me.LogDebugf("triggering callback: %s (%+v)", action.ActionID, action)
+				err = rctx.triggerCallback(action.ActionID, *action)
+				if err != nil {
+					return err
+				}
+			}
+			return nil
+		},
+	})
+}
+
+type multiStageOptions struct {
+	meta          *slackMetadataJet
+	src           SourceInfo
+	isHome        bool
+	msgOpts       messageOptions
+	async         asyncStateData
+	betweenStages func(rctx *renderContext) error
+}
+
+func (me *app) multiStageRender(ctx context.Context, opts multiStageOptions) error {
+	me.LogDebugf("using meta: %+v", opts.meta)
 
 	flow, ok := me.flows[FlowHandle{
-		id: meta.Flow,
+		id: opts.meta.Flow,
 	}]
 	if !ok {
 		return errors.New("unknown flow")
 	}
 
-	rctx, err := newRenderContext(ctx, flow.name, nil, meta, SourceInfo{
-		TeamID: interaction.Team.ID,
-		UserID: interaction.User.ID,
+	rctx, err := newRenderContext(ctx, flow.name, nil, opts.meta, opts.src, asyncStateData{
+		TeamID:    opts.src.TeamID,
+		UserID:    opts.src.UserID,
+		IsHome:    opts.isHome,
+		ChannelID: opts.async.ChannelID,
+		MessageTS: opts.async.MessageTS,
 	})
 	if err != nil {
 		return err
 	}
+
 	// first, we populate the render context
 	me.LogDebugf("first-pass rendering")
 	_, err = flow.renderBlocks(rctx)
@@ -171,31 +220,57 @@ func (me *app) handleBlockActions(ctx context.Context, interaction slack.Interac
 		return err
 	}
 
-	// then, we trigger the callbacks, updating the internal state
-	for _, action := range interaction.ActionCallback.BlockActions {
-		me.LogDebugf("triggering callback: %s (%+v)", action.ActionID, action)
-		err = rctx.triggerCallback(action.ActionID, *action)
-		if err != nil {
-			return err
-		}
-	}
-
-	// finally, we render the blocks again
-	me.LogDebugf("second-pass rendering")
-	msg, err := flow.renderWith(rctx, meta)
+	// then we update the internal state
+	err = opts.betweenStages(rctx)
 	if err != nil {
 		return err
 	}
 
-	if interaction.View.Type == slack.VTHomeTab {
+	// finally, we render the blocks again
+	me.LogDebugf("second-pass rendering")
+	msg, err := flow.renderWith(rctx, opts.meta)
+	if err != nil {
+		return err
+	}
+
+	if opts.isHome {
 		return me.publishView(ctx, msg, messageOptions{
-			TeamID: interaction.Team.ID,
-			UserID: interaction.User.ID,
+			TeamID: opts.src.TeamID,
+			UserID: opts.src.UserID,
 		})
 	}
-	return me.updateMessage(ctx, msg, messageOptions{
-		TeamID:      interaction.Team.ID,
-		ResponseURL: interaction.ResponseURL,
+	return me.updateMessage(ctx, msg, opts.msgOpts)
+}
+
+func (me *app) handleAsyncData(ctx context.Context, data asyncStateData, value json.RawMessage) error {
+	me.LogDebugf("handling async data: %+v", data)
+
+	msg, err := me.getMessage(ctx, data.TeamID, data.ChannelID, data.MessageTS)
+	if err != nil {
+		return err
+	}
+
+	meta, err := deserializeMetadata(&msg.Metadata, "")
+	if err != nil {
+		return err
+	}
+
+	return me.multiStageRender(ctx, multiStageOptions{
+		meta: meta,
+		src: SourceInfo{
+			TeamID: data.TeamID,
+			UserID: data.UserID,
+		},
+		isHome: data.IsHome,
+		msgOpts: messageOptions{
+			TeamID:    data.TeamID,
+			ChannelID: data.ChannelID,
+			MessageTS: data.MessageTS,
+		},
+		async: data,
+		betweenStages: func(rctx *renderContext) error {
+			return rctx.updateState(data.HookID, value)
+		},
 	})
 }
 
@@ -246,6 +321,7 @@ func (me *app) UpdateHome(ctx context.Context, workspaceID, userID string, updat
 			TeamID: workspaceID,
 			UserID: userID,
 		},
+		isHome: true,
 	}
 
 	msg, err := updater(appCtx)
@@ -254,4 +330,8 @@ func (me *app) UpdateHome(ctx context.Context, workspaceID, userID string, updat
 	}
 
 	return me.publishView(ctx, msg, appCtx.msgOpts)
+}
+
+func (me *app) SlackAPI(teamID string) (*slack.Client, error) {
+	return me.makeClientFor(teamID)
 }

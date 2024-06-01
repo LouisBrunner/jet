@@ -50,15 +50,15 @@ func deserializeMetadata(meta *slack.SlackMetadata, privMeta string) (*slackMeta
 	return &jetEntry, nil
 }
 
-func serializeMetadata(prev *slackMetadataJet, name string, hooks []slackMetadataHook) slack.SlackMetadata {
+func serializeMetadata(prev *slack.SlackMetadata, name string, rctx *renderContext) slack.SlackMetadata {
 	meta := slackMetadataJet{
 		Flow:  name,
-		Hooks: hooks,
+		Hooks: rctx.serializeHooks(),
+		Props: rctx.props,
 	}
 	if prev != nil {
-		final := prev.Original
-		final.EventPayload[jetMetadataEntry] = meta
-		return final
+		prev.EventPayload[jetMetadataEntry] = meta
+		return *prev
 	}
 	return slack.SlackMetadata{
 		EventType: "jet",
