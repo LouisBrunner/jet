@@ -202,33 +202,13 @@ func (me *app) multiStageRender(ctx context.Context, opts multiStageOptions) err
 		return errors.New("unknown flow")
 	}
 
-	rctx, err := newRenderContext(ctx, flow.name, nil, opts.meta, opts.src, asyncStateData{
+	msg, err := flow.multiStageRender(ctx, opts.meta, opts.src, &asyncStateData{
 		TeamID:    opts.src.TeamID,
 		UserID:    opts.src.UserID,
 		IsHome:    opts.isHome,
 		ChannelID: opts.async.ChannelID,
 		MessageTS: opts.async.MessageTS,
-	})
-	if err != nil {
-		return err
-	}
-
-	// first, we populate the render context
-	me.LogDebugf("first-pass rendering")
-	_, err = flow.renderBlocks(rctx)
-	if err != nil {
-		return err
-	}
-
-	// then we update the internal state
-	err = opts.betweenStages(rctx)
-	if err != nil {
-		return err
-	}
-
-	// finally, we render the blocks again
-	me.LogDebugf("second-pass rendering")
-	msg, err := flow.renderWith(rctx, opts.meta)
+	}, opts.betweenStages)
 	if err != nil {
 		return err
 	}
@@ -327,6 +307,9 @@ func (me *app) UpdateHome(ctx context.Context, workspaceID, userID string, updat
 	msg, err := updater(appCtx)
 	if err != nil {
 		return err
+	}
+	if msg == nil {
+		return fmt.Errorf("cannot update Home with a CanUpdateWithoutInteraction flow")
 	}
 
 	return me.publishView(ctx, msg, appCtx.msgOpts)

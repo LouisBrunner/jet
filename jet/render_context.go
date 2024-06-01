@@ -18,7 +18,8 @@ type RenderContext interface {
 	Source() SourceInfo
 	addState(initial func() (json.RawMessage, error)) (int, json.RawMessage, func(newValue json.RawMessage), error)
 	addCallback(callback Callback) (string, error)
-	getAsyncData() asyncStateData
+	addEffect(effect Effect) error
+	getAsyncData() *asyncStateData
 }
 
 type hookData struct {
@@ -32,25 +33,26 @@ type hookData struct {
 
 type renderContext struct {
 	context.Context
-	name          string
-	isInitial     bool
-	hookIdx       int
-	expectedHooks []*hookData
-	addedHooks    []*hookData
-	props         FlowProps
-	source        SourceInfo
-	async         asyncStateData
+	name                string
+	isInitial           bool
+	hookIdx             int
+	expectedHooks       []*hookData
+	addedHooks          []*hookData
+	pendingStartEffects []Effect
+	props               FlowProps
+	source              SourceInfo
+	async               *asyncStateData
 }
 
 func (me *renderContext) Source() SourceInfo {
 	return me.source
 }
 
-func (me *renderContext) getAsyncData() asyncStateData {
+func (me *renderContext) getAsyncData() *asyncStateData {
 	return me.async
 }
 
-func newRenderContext(ctx context.Context, name string, props FlowProps, metadata *slackMetadataJet, source SourceInfo, async asyncStateData) (*renderContext, error) {
+func newRenderContext(ctx context.Context, name string, props FlowProps, metadata *slackMetadataJet, source SourceInfo, async *asyncStateData) (*renderContext, error) {
 	var expectedHooks []*hookData
 	if metadata != nil {
 		expectedHooks = make([]*hookData, len(metadata.Hooks))
@@ -93,8 +95,9 @@ func (me *renderContext) serializeHooks() []slackMetadataHook {
 }
 
 const (
-	hookState    = "state"
-	hookCallback = "callback"
+	hookState       = "state"
+	hookCallback    = "callback"
+	hookEffectStart = "effect-start"
 )
 
 func (me *renderContext) addState(initial func() (json.RawMessage, error)) (int, json.RawMessage, func(newValue json.RawMessage), error) {
@@ -147,6 +150,16 @@ func (me *renderContext) triggerCallback(callbackID string, action slack.BlockAc
 		return hook.callback(me, action)
 	}
 	return fmt.Errorf("unknown callback: %s", callbackID)
+}
+
+func (me *renderContext) addEffect(effect Effect) error {
+	_, prev, err := me.fetchHook(hookEffectStart)
+	if err != nil {
+		return err
+	}
+	me.addedHooks = append(me.addedHooks, prev)
+	me.pendingStartEffects = append(me.pendingStartEffects, effect)
+	return nil
 }
 
 func (me *renderContext) fetchHook(kind string) (int, *hookData, error) {

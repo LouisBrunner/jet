@@ -3,6 +3,7 @@ package jet
 import (
 	"context"
 	"errors"
+	"fmt"
 
 	"github.com/mitchellh/mapstructure"
 	"github.com/slack-go/slack"
@@ -65,17 +66,17 @@ type messageOptions struct {
 	UserID string
 }
 
-func (me *appContext) renderFlow(flow *FlowHandle, props FlowProps) (*Flow, *slack.Msg, error) {
+func (me *appContext) renderFlow(flow *FlowHandle, props FlowProps) (*Flow, *slack.Msg, postCreateFlowFn, error) {
 	f, ok := me.app.flows[*flow]
 	if !ok {
-		return nil, nil, errors.New("unknown flow")
+		return nil, nil, nil, errors.New("unknown flow")
 	}
-	msg, err := f.renderFresh(me.Context, props, me.source, me.msgOpts, me.isHome)
-	return f, msg, err
+	msg, post, err := f.renderFresh(me.Context, props, me.source, me.msgOpts, me.isHome)
+	return f, msg, post, err
 }
 
 func (me *appContext) StartFlow(flow *FlowHandle, props FlowProps) (*slack.Msg, error) {
-	f, msg, err := me.renderFlow(flow, props)
+	f, msg, post, err := me.renderFlow(flow, props)
 	if err != nil {
 		return nil, err
 	}
@@ -84,19 +85,56 @@ func (me *appContext) StartFlow(flow *FlowHandle, props FlowProps) (*slack.Msg, 
 			return nil, errors.New("missing ChannelID when using CanUpdateWithoutInteraction")
 		}
 		me.msgOpts.ResponseURL = ""
-		_, err := me.app.createMessage(me.Context, msg, me.msgOpts)
-		return nil, err
+		return nil, me.createWithPost(f, msg, post)
+	} else if post != nil {
+		return nil, fmt.Errorf("cannot use UseEffectAtStart without CanUpdateWithoutInteraction")
 	}
 	return msg, nil
 }
 
-func (me *appContext) StartFlowAndPost(flow *FlowHandle, props FlowProps) error {
-	_, msg, err := me.renderFlow(flow, props)
+func (me *appContext) createWithPost(f *Flow, msg *slack.Msg, post postCreateFlowFn) error {
+	ts, err := me.app.createMessage(me.Context, msg, me.msgOpts)
 	if err != nil {
 		return err
 	}
-	_, err = me.app.createMessage(me.Context, msg, me.msgOpts)
-	return err
+	if post != nil {
+		go func() {
+			err := me.processPostFlow(context.Background(), post, msg, &asyncStateData{
+				TeamID:    me.msgOpts.TeamID,
+				UserID:    me.msgOpts.UserID,
+				ChannelID: me.msgOpts.ChannelID,
+				MessageTS: ts,
+			})
+			if err != nil {
+				me.app.LogErrorf("failed to process post flow: %v", err)
+			}
+		}()
+	}
+	return nil
+}
+
+func (me *appContext) processPostFlow(ctx context.Context, post postCreateFlowFn, orig *slack.Msg, async *asyncStateData) error {
+	meta, err := deserializeMetadata(&orig.Metadata, "")
+	if err != nil {
+		return err
+	}
+	msg, err := post(ctx, meta, async)
+	if err != nil {
+		return err
+	}
+	return me.app.updateMessage(ctx, msg, messageOptions{
+		TeamID:    async.TeamID,
+		ChannelID: async.ChannelID,
+		MessageTS: async.MessageTS,
+	})
+}
+
+func (me *appContext) StartFlowAndPost(flow *FlowHandle, props FlowProps) error {
+	f, msg, post, err := me.renderFlow(flow, props)
+	if err != nil {
+		return err
+	}
+	return me.createWithPost(f, msg, post)
 }
 
 func (me *appContext) App() App {

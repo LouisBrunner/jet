@@ -45,18 +45,54 @@ func (me *Flow) canUpdateWithoutInteraction() bool {
 	return me.canUpdateWithoutInteractionOpt
 }
 
-func (me *Flow) renderFresh(ctx context.Context, props FlowProps, source SourceInfo, msgOpts messageOptions, isHome bool) (*slack.Msg, error) {
-	rctx, err := newRenderContext(ctx, me.name, props, nil, source, asyncStateData{
-		TeamID:    source.TeamID,
-		UserID:    source.UserID,
-		IsHome:    isHome,
-		ChannelID: msgOpts.ChannelID,
-		MessageTS: msgOpts.MessageTS,
-	})
+type postCreateFlowFn func(ctx context.Context, meta *slackMetadataJet, async *asyncStateData) (*slack.Msg, error)
+
+func (me *Flow) renderFresh(ctx context.Context, props FlowProps, source SourceInfo, msgOpts messageOptions, isHome bool) (*slack.Msg, postCreateFlowFn, error) {
+	rctx, err := newRenderContext(ctx, me.name, props, nil, source, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	msg, err := me.renderWith(rctx, nil)
+	if err != nil {
+		return nil, nil, err
+	}
+	var post postCreateFlowFn
+	if len(rctx.pendingStartEffects) > 0 {
+		post = func(ctx context.Context, meta *slackMetadataJet, async *asyncStateData) (*slack.Msg, error) {
+			return me.multiStageRender(ctx, meta, source, async, func(rctx *renderContext) error {
+				for _, effect := range rctx.pendingStartEffects {
+					err := effect(rctx)
+					if err != nil {
+						return err
+					}
+				}
+				return nil
+			})
+		}
+	}
+	return msg, post, nil
+}
+
+func (me *Flow) multiStageRender(ctx context.Context, meta *slackMetadataJet, src SourceInfo, async *asyncStateData, betweenStages func(rctx *renderContext) error) (*slack.Msg, error) {
+	rctx, err := newRenderContext(ctx, me.name, nil, meta, src, async)
 	if err != nil {
 		return nil, err
 	}
-	return me.renderWith(rctx, nil)
+
+	// first, we populate the render context
+	_, err = me.renderBlocks(rctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// then we update the internal state
+	err = betweenStages(rctx)
+	if err != nil {
+		return nil, err
+	}
+
+	// finally, we render the blocks again
+	return me.renderWith(rctx, meta)
 }
 
 func (me *Flow) renderWith(rctx *renderContext, metadata *slackMetadataJet) (*slack.Msg, error) {

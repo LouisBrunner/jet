@@ -29,7 +29,7 @@ type UseStateAsyncData[T any] struct {
 type UseStateSetters[T any] interface {
 	SetSync(newValue T) error
 	SetAsync(newValue T) error
-	GetAsyncData() UseStateAsyncData[T]
+	GetAsyncData() (*UseStateAsyncData[T], error)
 }
 
 func UseState[T any](ctx RenderContext, initialValue T) (T, UseStateSetter[T], error) {
@@ -49,7 +49,7 @@ func UseStateFn[T any](ctx RenderContext, initializer func() T) (T, UseStateSett
 type useStateSetters[T any] struct {
 	ctx  RenderContext
 	sync UseStateSetter[T]
-	data UseStateAsyncData[T]
+	data *UseStateAsyncData[T]
 }
 
 func (me *useStateSetters[T]) SetSync(newValue T) error {
@@ -57,11 +57,18 @@ func (me *useStateSetters[T]) SetSync(newValue T) error {
 }
 
 func (me *useStateSetters[T]) SetAsync(newValue T) error {
-	return ProcessAsyncData(me.ctx, nil, me.data, newValue)
+	data, err := me.GetAsyncData()
+	if err != nil {
+		return err
+	}
+	return ProcessAsyncData(me.ctx, nil, *data, newValue)
 }
 
-func (me *useStateSetters[T]) GetAsyncData() UseStateAsyncData[T] {
-	return me.data
+func (me *useStateSetters[T]) GetAsyncData() (*UseStateAsyncData[T], error) {
+	if me.data == nil {
+		return nil, fmt.Errorf("async data not available")
+	}
+	return me.data, nil
 }
 
 func UseStateAdvanced[T any](ctx RenderContext, initializer func() T) (T, UseStateSetters[T], error) {
@@ -87,14 +94,18 @@ func UseStateAdvanced[T any](ctx RenderContext, initializer func() T) (T, UseSta
 		return nil
 	}
 
+	var asyncData *UseStateAsyncData[T]
 	async := ctx.getAsyncData()
-	async.HookID = id
+	if async != nil {
+		async.HookID = id
+		asyncData = &UseStateAsyncData[T]{
+			P: *async,
+		}
+	}
 	return value, &useStateSetters[T]{
 		ctx:  ctx,
 		sync: set,
-		data: UseStateAsyncData[T]{
-			P: async,
-		},
+		data: asyncData,
 	}, nil
 }
 
@@ -110,4 +121,10 @@ func ProcessAsyncData[T any](ctx context.Context, app App, async UseStateAsyncDa
 		return err
 	}
 	return app.handleAsyncData(ctx, async.P, valueRaw)
+}
+
+type Effect func(ctx context.Context) error
+
+func UseEffectAtStart(ctx RenderContext, effect Effect) error {
+	return ctx.addEffect(effect)
 }
