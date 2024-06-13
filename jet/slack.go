@@ -111,6 +111,31 @@ func (me *app) publishView(ctx context.Context, msg *slack.Msg, in messageOption
 	return err
 }
 
+func (me *app) openView(ctx context.Context, msg *slack.Msg, modalCfg ModalConfig, triggerID string, in messageOptions) error {
+	client, err := me.makeClientFor(in.TeamID)
+	if err != nil {
+		return err
+	}
+
+	meta, err := json.Marshal(msg.Metadata)
+	if err != nil {
+		return fmt.Errorf("failed to marshal metadata: %w", err)
+	}
+
+	me.LogDebugf("opening view: %+v", msg)
+	_, err = client.OpenViewContext(ctx, triggerID, slack.ModalViewRequest{
+		Type:            slack.VTModal,
+		Title:           modalCfg.Title,
+		Close:           modalCfg.Close,
+		Submit:          modalCfg.Submit,
+		ClearOnClose:    modalCfg.ClearOnClose,
+		NotifyOnClose:   modalCfg.NotifyOnClose,
+		Blocks:          msg.Blocks,
+		PrivateMetadata: string(meta),
+	})
+	return err
+}
+
 func (me *app) tokenExchange(ctx context.Context, code, clientID, clientSecret string) (*slack.OAuthV2Response, error) {
 	resp, err := slack.GetOAuthV2Response(http.DefaultClient, clientID, clientSecret, code, "")
 	if err != nil {

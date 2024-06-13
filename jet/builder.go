@@ -13,6 +13,7 @@ type AppBuilder interface {
 	AddGlobalShortcut(name string, handler ShortcutHandler) AppBuilder
 	AddMessageShortcut(name string, handler ShortcutHandler) AppBuilder
 	HandleUnknownShortcut(handler ShortcutHandler) AppBuilder
+	HandleSubmittedView(name string, handler ViewSubmittedHandler) AppBuilder
 
 	Build(opts Options) App
 }
@@ -23,6 +24,7 @@ type appBuilder struct {
 	unknownSlash     SlashCommandHandler
 	globalShortcuts  map[string]ShortcutHandler
 	messageShortcuts map[string]ShortcutHandler
+	viewSubmitted    map[string]ViewSubmittedHandler
 	unknownShortcut  ShortcutHandler
 }
 
@@ -32,6 +34,7 @@ func NewBuilder() AppBuilder {
 		slashes:          make(map[string]SlashCommandHandler),
 		globalShortcuts:  make(map[string]ShortcutHandler),
 		messageShortcuts: make(map[string]ShortcutHandler),
+		viewSubmitted:    make(map[string]ViewSubmittedHandler),
 	}
 }
 
@@ -72,6 +75,11 @@ func (me *appBuilder) HandleUnknownShortcut(handler ShortcutHandler) AppBuilder 
 	return me
 }
 
+func (me *appBuilder) HandleSubmittedView(name string, handler ViewSubmittedHandler) AppBuilder {
+	me.viewSubmitted[name] = handler
+	return me
+}
+
 func (me *appBuilder) Build(opts Options) App {
 	return &app{
 		flows:            me.flows,
@@ -79,6 +87,7 @@ func (me *appBuilder) Build(opts Options) App {
 		unknownSlash:     me.unknownSlash,
 		globalShortcuts:  me.globalShortcuts,
 		messageShortcuts: me.messageShortcuts,
+		viewSubmitted:    me.viewSubmitted,
 		unknownShortcut:  me.unknownShortcut,
 		opts:             opts,
 	}

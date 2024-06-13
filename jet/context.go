@@ -42,8 +42,9 @@ func MarshalProps[T structLike](data T) (FlowProps, error) {
 
 type Context interface {
 	context.Context
-	StartFlow(flow *FlowHandle, props FlowProps) (*slack.Msg, error)
+	StartFlow(flow *FlowHandle, props FlowProps) (*Message, error)
 	StartFlowAndPost(flow *FlowHandle, props FlowProps) error
+	OpenModal(msg *Message, triggerID string) error
 	App() App
 }
 
@@ -66,7 +67,7 @@ type messageOptions struct {
 	UserID string
 }
 
-func (me *appContext) renderFlow(flow *FlowHandle, props FlowProps) (*Flow, *slack.Msg, postCreateFlowFn, error) {
+func (me *appContext) renderFlow(flow *FlowHandle, props FlowProps) (*Flow, *Message, postCreateFlowFn, error) {
 	f, ok := me.app.flows[*flow]
 	if !ok {
 		return nil, nil, nil, errors.New("unknown flow")
@@ -75,7 +76,7 @@ func (me *appContext) renderFlow(flow *FlowHandle, props FlowProps) (*Flow, *sla
 	return f, msg, post, err
 }
 
-func (me *appContext) StartFlow(flow *FlowHandle, props FlowProps) (*slack.Msg, error) {
+func (me *appContext) StartFlow(flow *FlowHandle, props FlowProps) (*Message, error) {
 	f, msg, post, err := me.renderFlow(flow, props)
 	if err != nil {
 		return nil, err
@@ -92,18 +93,26 @@ func (me *appContext) StartFlow(flow *FlowHandle, props FlowProps) (*slack.Msg, 
 	return msg, nil
 }
 
-func (me *appContext) createWithPost(f *Flow, msg *slack.Msg, post postCreateFlowFn) error {
-	ts, err := me.app.createMessage(me.Context, msg, me.msgOpts)
+func (me *appContext) createWithPost(f *Flow, msg *Message, post postCreateFlowFn) error {
+	ts, err := me.app.createMessage(me.Context, &msg.Msg, me.msgOpts)
 	if err != nil {
 		return err
 	}
 	if post != nil {
+		var extraMeta *slack.SlackMetadata
+		responseURL := ""
+		if ts == "" {
+			extraMeta = &msg.Metadata
+			responseURL = me.msgOpts.ResponseURL
+		}
 		go func() {
 			err := me.processPostFlow(context.Background(), post, msg, &asyncStateData{
-				TeamID:    me.msgOpts.TeamID,
-				UserID:    me.msgOpts.UserID,
-				ChannelID: me.msgOpts.ChannelID,
-				MessageTS: ts,
+				TeamID:      me.msgOpts.TeamID,
+				UserID:      me.msgOpts.UserID,
+				ChannelID:   me.msgOpts.ChannelID,
+				MessageTS:   ts,
+				ResponseURL: responseURL,
+				Metadata:    extraMeta,
 			})
 			if err != nil {
 				me.app.LogErrorf("failed to process post flow: %v", err)
@@ -113,7 +122,7 @@ func (me *appContext) createWithPost(f *Flow, msg *slack.Msg, post postCreateFlo
 	return nil
 }
 
-func (me *appContext) processPostFlow(ctx context.Context, post postCreateFlowFn, orig *slack.Msg, async *asyncStateData) error {
+func (me *appContext) processPostFlow(ctx context.Context, post postCreateFlowFn, orig *Message, async *asyncStateData) error {
 	meta, err := deserializeMetadata(&orig.Metadata, "")
 	if err != nil {
 		return err
@@ -122,11 +131,19 @@ func (me *appContext) processPostFlow(ctx context.Context, post postCreateFlowFn
 	if err != nil {
 		return err
 	}
-	return me.app.updateMessage(ctx, msg, messageOptions{
-		TeamID:    async.TeamID,
-		ChannelID: async.ChannelID,
-		MessageTS: async.MessageTS,
+	return me.app.updateMessage(ctx, &msg.Msg, messageOptions{
+		TeamID:      async.TeamID,
+		ChannelID:   async.ChannelID,
+		MessageTS:   async.MessageTS,
+		ResponseURL: async.ResponseURL,
 	})
+}
+
+func (me *appContext) OpenModal(msg *Message, triggerID string) error {
+	if msg.modal == nil {
+		return errors.New("message is not a modal")
+	}
+	return me.app.openView(me.Context, &msg.Msg, *msg.modal, triggerID, me.msgOpts)
 }
 
 func (me *appContext) StartFlowAndPost(flow *FlowHandle, props FlowProps) error {
@@ -141,7 +158,7 @@ func (me *appContext) App() App {
 	return me.app
 }
 
-func StartFlow[T structLike](ctx Context, flow *FlowHandle, props T) (*slack.Msg, error) {
+func StartFlow[T structLike](ctx Context, flow *FlowHandle, props T) (*Message, error) {
 	propsMap, err := MarshalProps(props)
 	if err != nil {
 		return nil, err

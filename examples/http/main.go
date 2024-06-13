@@ -60,7 +60,7 @@ func work() error {
 		return err
 	}
 	app := builder.
-		AddSlash("/test-jet", func(ctx jet.Context, args slack.SlashCommand) (*slack.Msg, error) {
+		AddSlash("/test-jet", func(ctx jet.Context, args slack.SlashCommand) (*jet.Message, error) {
 			return ctx.StartFlow(f1, nil)
 		}).
 		AddGlobalShortcut("jet_global", func(ctx jet.Context, args slack.InteractionCallback) error {

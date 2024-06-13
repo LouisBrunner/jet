@@ -2,8 +2,6 @@ package jet
 
 import (
 	"net/http"
-
-	"github.com/slack-go/slack"
 )
 
 type AccessTokenRetriever func(teamID string) (string, error)
@@ -45,7 +43,7 @@ type OAuthConfig struct {
 	RenderErrorPage OAuthRenderError
 }
 
-type ErrorFormatter func(error) slack.Msg
+type ErrorFormatter = func(error) Message
 
 type Options struct {
 	Credentials    Credentials

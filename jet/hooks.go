@@ -18,6 +18,9 @@ type asyncStateData struct {
 	// when not home
 	ChannelID string
 	MessageTS string
+	// when coming from interactivity
+	ResponseURL string
+	Metadata    *slack.SlackMetadata
 
 	HookID int
 }

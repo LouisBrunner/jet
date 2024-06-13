@@ -23,10 +23,42 @@ type Flow struct {
 	renderFn                       FlowRenderer
 }
 
+type ModalConfig struct {
+	Title         *slack.TextBlockObject
+	Submit        *slack.TextBlockObject
+	Close         *slack.TextBlockObject
+	ClearOnClose  bool
+	NotifyOnClose bool
+}
+
 type RenderedFlow struct {
 	Blocks   slack.Blocks
 	Text     string
 	Metadata *slack.SlackMetadata
+	ForModal *ModalConfig
+}
+
+type Message struct {
+	slack.Msg
+	modal *ModalConfig
+}
+
+func EphemeralMessage(blocks slack.Blocks) *Message {
+	return &Message{
+		Msg: slack.Msg{
+			ResponseType: slack.ResponseTypeEphemeral,
+			Blocks:       blocks,
+		},
+	}
+}
+
+func EphemeralTextMessage(text string) *Message {
+	return &Message{
+		Msg: slack.Msg{
+			ResponseType: slack.ResponseTypeEphemeral,
+			Text:         text,
+		},
+	}
 }
 
 func NewFlow(name string, render FlowRenderer, opts *FlowOptions) Flow {
@@ -45,9 +77,9 @@ func (me *Flow) canUpdateWithoutInteraction() bool {
 	return me.canUpdateWithoutInteractionOpt
 }
 
-type postCreateFlowFn func(ctx context.Context, meta *slackMetadataJet, async *asyncStateData) (*slack.Msg, error)
+type postCreateFlowFn func(ctx context.Context, meta *slackMetadataJet, async *asyncStateData) (*Message, error)
 
-func (me *Flow) renderFresh(ctx context.Context, props FlowProps, source SourceInfo, msgOpts messageOptions, isHome bool) (*slack.Msg, postCreateFlowFn, error) {
+func (me *Flow) renderFresh(ctx context.Context, props FlowProps, source SourceInfo, msgOpts messageOptions, isHome bool) (*Message, postCreateFlowFn, error) {
 	rctx, err := newRenderContext(ctx, me.name, props, nil, source, nil)
 	if err != nil {
 		return nil, nil, err
@@ -58,7 +90,7 @@ func (me *Flow) renderFresh(ctx context.Context, props FlowProps, source SourceI
 	}
 	var post postCreateFlowFn
 	if len(rctx.pendingStartEffects) > 0 {
-		post = func(ctx context.Context, meta *slackMetadataJet, async *asyncStateData) (*slack.Msg, error) {
+		post = func(ctx context.Context, meta *slackMetadataJet, async *asyncStateData) (*Message, error) {
 			return me.multiStageRender(ctx, meta, source, async, func(rctx *renderContext) error {
 				for _, effect := range rctx.pendingStartEffects {
 					err := effect(rctx)
@@ -73,7 +105,7 @@ func (me *Flow) renderFresh(ctx context.Context, props FlowProps, source SourceI
 	return msg, post, nil
 }
 
-func (me *Flow) multiStageRender(ctx context.Context, meta *slackMetadataJet, src SourceInfo, async *asyncStateData, betweenStages func(rctx *renderContext) error) (*slack.Msg, error) {
+func (me *Flow) multiStageRender(ctx context.Context, meta *slackMetadataJet, src SourceInfo, async *asyncStateData, betweenStages func(rctx *renderContext) error) (*Message, error) {
 	rctx, err := newRenderContext(ctx, me.name, nil, meta, src, async)
 	if err != nil {
 		return nil, err
@@ -95,7 +127,7 @@ func (me *Flow) multiStageRender(ctx context.Context, meta *slackMetadataJet, sr
 	return me.renderWith(rctx, meta)
 }
 
-func (me *Flow) renderWith(rctx *renderContext, metadata *slackMetadataJet) (*slack.Msg, error) {
+func (me *Flow) renderWith(rctx *renderContext, metadata *slackMetadataJet) (*Message, error) {
 	rendered, err := me.renderBlocks(rctx)
 	if err != nil {
 		return nil, err
@@ -118,12 +150,15 @@ func (me *Flow) renderWith(rctx *renderContext, metadata *slackMetadataJet) (*sl
 			}
 		}
 	}
-	return &slack.Msg{
-		ResponseType:    slack.ResponseTypeInChannel,
-		ReplaceOriginal: true,
-		Text:            rendered.Text,
-		Blocks:          rendered.Blocks,
-		Metadata:        serializeMetadata(finalMetadata, me.name, rctx),
+	return &Message{
+		Msg: slack.Msg{
+			ResponseType:    slack.ResponseTypeInChannel,
+			ReplaceOriginal: true,
+			Text:            rendered.Text,
+			Blocks:          rendered.Blocks,
+			Metadata:        serializeMetadata(finalMetadata, me.name, rctx),
+		},
+		modal: rendered.ForModal,
 	}, nil
 }
 

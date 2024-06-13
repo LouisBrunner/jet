@@ -10,10 +10,10 @@ import (
 	"github.com/slack-go/slack"
 )
 
-type HomeUpdater func(ctx Context) (*slack.Msg, error)
+type HomeUpdater = func(ctx Context) (*Message, error)
 
 type App interface {
-	HandleSlashCommand(ctx context.Context, slash slack.SlashCommand) *slack.Msg
+	HandleSlashCommand(ctx context.Context, slash slack.SlashCommand) *Message
 	HandleInteraction(ctx context.Context, interaction slack.InteractionCallback) error
 	// TODO: select menu
 	// TODO: workflow step
@@ -36,6 +36,7 @@ type app struct {
 	unknownSlash     SlashCommandHandler
 	globalShortcuts  map[string]ShortcutHandler
 	messageShortcuts map[string]ShortcutHandler
+	viewSubmitted    map[string]ViewSubmittedHandler
 	unknownShortcut  ShortcutHandler
 	opts             Options
 }
@@ -44,7 +45,7 @@ func (me *app) Options() Options {
 	return me.opts
 }
 
-func (me *app) HandleSlashCommand(ctx context.Context, slash slack.SlashCommand) *slack.Msg {
+func (me *app) HandleSlashCommand(ctx context.Context, slash slack.SlashCommand) *Message {
 	me.LogDebugf("handling slash command: %+v", slash)
 
 	appCtx := &appContext{
@@ -61,7 +62,7 @@ func (me *app) HandleSlashCommand(ctx context.Context, slash slack.SlashCommand)
 		},
 	}
 
-	var res *slack.Msg
+	var res *Message
 	var err error
 	cmd, ok := me.slashes[slash.Command]
 	if !ok {
@@ -79,9 +80,11 @@ func (me *app) HandleSlashCommand(ctx context.Context, slash slack.SlashCommand)
 			msg := me.opts.ErrorFormatter(err)
 			res = &msg
 		} else {
-			res = &slack.Msg{
-				ResponseType: slack.ResponseTypeEphemeral,
-				Text:         err.Error(),
+			res = &Message{
+				Msg: slack.Msg{
+					ResponseType: slack.ResponseTypeEphemeral,
+					Text:         err.Error(),
+				},
 			}
 		}
 	}
@@ -107,7 +110,7 @@ func (me *app) HandleInteraction(ctx context.Context, interaction slack.Interact
 	case slack.InteractionTypeBlockSuggestion:
 		panic("not implemented") // TODO: finish
 	case slack.InteractionTypeViewSubmission:
-		panic("not implemented") // TODO: finish
+		return me.handleViewSubmission(ctx, interaction)
 	case slack.InteractionTypeViewClosed:
 		panic("not implemented") // TODO: finish
 	case slack.InteractionTypeShortcut:
@@ -183,6 +186,40 @@ func (me *app) handleBlockActions(ctx context.Context, interaction slack.Interac
 	})
 }
 
+func (me *app) handleViewSubmission(ctx context.Context, interaction slack.InteractionCallback) error {
+	meta, err := deserializeMetadata(&interaction.Message.Metadata, interaction.View.PrivateMetadata)
+	if err != nil {
+		return err
+	}
+
+	handler, found := me.viewSubmitted[meta.Flow]
+	if !found {
+		return errors.New("unknown view submission")
+	}
+
+	url := interaction.ResponseURL
+	channelID := ""
+	for _, action := range interaction.ResponseURLs {
+		url = action.ResponseURL
+		channelID = action.ChannelID
+		break
+	}
+
+	return handler(&appContext{
+		Context: ctx,
+		app:     me,
+		msgOpts: messageOptions{
+			TeamID:      interaction.Team.ID,
+			ChannelID:   channelID,
+			ResponseURL: url,
+		},
+		source: SourceInfo{
+			TeamID: interaction.Team.ID,
+			UserID: interaction.User.ID,
+		},
+	}, interaction)
+}
+
 type multiStageOptions struct {
 	meta          *slackMetadataJet
 	src           SourceInfo
@@ -203,36 +240,46 @@ func (me *app) multiStageRender(ctx context.Context, opts multiStageOptions) err
 	}
 
 	msg, err := flow.multiStageRender(ctx, opts.meta, opts.src, &asyncStateData{
-		TeamID:    opts.src.TeamID,
-		UserID:    opts.src.UserID,
-		IsHome:    opts.isHome,
-		ChannelID: opts.async.ChannelID,
-		MessageTS: opts.async.MessageTS,
+		TeamID:      opts.src.TeamID,
+		UserID:      opts.src.UserID,
+		IsHome:      opts.isHome,
+		ChannelID:   opts.async.ChannelID,
+		MessageTS:   opts.async.MessageTS,
+		ResponseURL: opts.async.ResponseURL,
+		Metadata:    opts.async.Metadata,
 	}, opts.betweenStages)
 	if err != nil {
 		return err
 	}
 
 	if opts.isHome {
-		return me.publishView(ctx, msg, messageOptions{
+		return me.publishView(ctx, &msg.Msg, messageOptions{
 			TeamID: opts.src.TeamID,
 			UserID: opts.src.UserID,
 		})
 	}
-	return me.updateMessage(ctx, msg, opts.msgOpts)
+	return me.updateMessage(ctx, &msg.Msg, opts.msgOpts)
 }
 
 func (me *app) handleAsyncData(ctx context.Context, data asyncStateData, value json.RawMessage) error {
 	me.LogDebugf("handling async data: %+v", data)
 
+	var meta *slackMetadataJet
 	msg, err := me.getMessage(ctx, data.TeamID, data.ChannelID, data.MessageTS)
 	if err != nil {
-		return err
-	}
-
-	meta, err := deserializeMetadata(&msg.Metadata, "")
-	if err != nil {
-		return err
+		if data.Metadata != nil {
+			meta, err = deserializeMetadata(data.Metadata, "")
+			if err != nil {
+				return err
+			}
+		} else {
+			return err
+		}
+	} else {
+		meta, err = deserializeMetadata(&msg.Metadata, "")
+		if err != nil {
+			return err
+		}
 	}
 
 	return me.multiStageRender(ctx, multiStageOptions{
@@ -243,9 +290,10 @@ func (me *app) handleAsyncData(ctx context.Context, data asyncStateData, value j
 		},
 		isHome: data.IsHome,
 		msgOpts: messageOptions{
-			TeamID:    data.TeamID,
-			ChannelID: data.ChannelID,
-			MessageTS: data.MessageTS,
+			TeamID:      data.TeamID,
+			ChannelID:   data.ChannelID,
+			MessageTS:   data.MessageTS,
+			ResponseURL: data.ResponseURL,
 		},
 		async: data,
 		betweenStages: func(rctx *renderContext) error {
@@ -312,7 +360,7 @@ func (me *app) UpdateHome(ctx context.Context, workspaceID, userID string, updat
 		return fmt.Errorf("cannot update Home with a CanUpdateWithoutInteraction flow")
 	}
 
-	return me.publishView(ctx, msg, appCtx.msgOpts)
+	return me.publishView(ctx, &msg.Msg, appCtx.msgOpts)
 }
 
 func (me *app) SlackAPI(teamID string) (*slack.Client, error) {
