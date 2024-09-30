@@ -1,7 +1,7 @@
 module github.com/LouisBrunner/jet
 
 go 1.22
-toolchain go1.22.5
+toolchain go1.23.1
 
 require (
 	github.com/joho/godotenv v1.5.1
@@ -10,7 +10,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/slack-go/slack v0.14.0
 	github.com/t-yuki/gocover-cobertura v0.0.0-20180217150009-aaee18c8195c
-	github.com/vektra/mockery/v2 v2.46.0
+	github.com/vektra/mockery/v2 v2.46.1
 	gotest.tools/gotestsum v1.12.0
 	honnef.co/go/tools v0.5.1
 )
