@@ -229,5 +229,5 @@ gotest.tools/gotestsum v1.12.0 h1:CmwtaGDkHxrZm4Ib0Vob89MTfpc3GrEFMJKovliPwGk=
 gotest.tools/gotestsum v1.12.0/go.mod h1:fAvqkSptospfSbQw26CTYzNwnsE/ztqLeyhP0h67ARY=
 gotest.tools/v3 v3.5.1 h1:EENdUnS3pdur5nybKYIh2Vfgc8IUNBjxDPSjtiJcOzU=
 gotest.tools/v3 v3.5.1/go.mod h1:isy3WKz7GK6uNw/sbHzfKBLvlvXwUyV06n6brMxxopU=
-honnef.co/go/tools v0.5.1 h1:4bH5o3b5ZULQ4UrBmP+63W9r7qIkqJClEA9ko5YKx+I=
-honnef.co/go/tools v0.5.1/go.mod h1:e9irvo83WDG9/irijV44wr3tbhcFeRnfpVlRqVwpzMs=
+honnef.co/go/tools v0.6.0 h1:TAODvD3knlq75WCp2nyGJtT4LeRV/o7NN9nYPeVJXf8=
+honnef.co/go/tools v0.6.0/go.mod h1:3puzxxljPCe8RGJX7BIy1plGbxEOZni5mR2aXe3/uk4=

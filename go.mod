@@ -12,7 +12,7 @@ require (
 	github.com/t-yuki/gocover-cobertura v0.0.0-20180217150009-aaee18c8195c
 	github.com/vektra/mockery/v2 v2.52.2
 	gotest.tools/gotestsum v1.12.0
-	honnef.co/go/tools v0.5.1
+	honnef.co/go/tools v0.6.0
 )
 
 require (
