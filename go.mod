@@ -9,7 +9,7 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/slack-go/slack v0.16.0
 	github.com/t-yuki/gocover-cobertura v0.0.0-20180217150009-aaee18c8195c
-	github.com/vektra/mockery/v2 v2.53.5
+	github.com/vektra/mockery/v2 v2.53.6
 	gotest.tools/gotestsum v1.13.0
 	honnef.co/go/tools v0.7.0
 )
@@ -21,7 +21,7 @@ require (
 	github.com/dnephin/pflag v1.0.7 // indirect
 	github.com/fatih/color v1.18.0 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
-	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
 	github.com/gorilla/websocket v1.5.1 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
@@ -32,27 +32,26 @@ require (
 	github.com/mattn/go-colorable v0.1.14 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/mitchellh/go-homedir v1.1.0 // indirect
-	github.com/pelletier/go-toml/v2 v2.2.3 // indirect
-	github.com/rs/zerolog v1.33.0 // indirect
-	github.com/sagikazarmark/locafero v0.7.0 // indirect
-	github.com/sourcegraph/conc v0.3.0 // indirect
-	github.com/spf13/afero v1.12.0 // indirect
-	github.com/spf13/cast v1.7.1 // indirect
-	github.com/spf13/cobra v1.8.1 // indirect
-	github.com/spf13/pflag v1.0.6 // indirect
-	github.com/spf13/viper v1.20.0 // indirect
+	github.com/pelletier/go-toml/v2 v2.2.4 // indirect
+	github.com/rs/zerolog v1.34.0 // indirect
+	github.com/sagikazarmark/locafero v0.12.0 // indirect
+	github.com/spf13/afero v1.15.0 // indirect
+	github.com/spf13/cast v1.10.0 // indirect
+	github.com/spf13/cobra v1.10.2 // indirect
+	github.com/spf13/pflag v1.0.10 // indirect
+	github.com/spf13/viper v1.21.0 // indirect
 	github.com/subosito/gotenv v1.6.0 // indirect
 	github.com/valyala/bytebufferpool v1.0.0 // indirect
 	github.com/valyala/fasttemplate v1.2.2 // indirect
-	go.uber.org/multierr v1.11.0 // indirect
-	golang.org/x/crypto v0.46.0 // indirect
+	go.yaml.in/yaml/v3 v3.0.4 // indirect
+	golang.org/x/crypto v0.48.0 // indirect
 	golang.org/x/exp/typeparams v0.0.0-20240529005216-23cca8864a10 // indirect
-	golang.org/x/mod v0.31.0 // indirect
-	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/mod v0.33.0 // indirect
+	golang.org/x/net v0.50.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.39.0 // indirect
-	golang.org/x/term v0.38.0 // indirect
-	golang.org/x/text v0.32.0 // indirect
-	golang.org/x/tools v0.40.1-0.20260108161641-ca281cf95054 // indirect
+	golang.org/x/sys v0.41.0 // indirect
+	golang.org/x/term v0.40.0 // indirect
+	golang.org/x/text v0.34.0 // indirect
+	golang.org/x/tools v0.42.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
