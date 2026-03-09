@@ -7,7 +7,7 @@ require (
 	github.com/labstack/echo/v4 v4.15.1
 	github.com/mitchellh/mapstructure v1.5.0
 	github.com/sirupsen/logrus v1.9.4
-	github.com/slack-go/slack v0.16.0
+	github.com/slack-go/slack v0.19.0
 	github.com/t-yuki/gocover-cobertura v0.0.0-20180217150009-aaee18c8195c
 	github.com/vektra/mockery/v2 v2.53.6
 	gotest.tools/gotestsum v1.13.0
@@ -23,7 +23,7 @@ require (
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510 // indirect
-	github.com/gorilla/websocket v1.5.1 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/huandu/xstrings v1.4.0 // indirect
 	github.com/iancoleman/strcase v0.3.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
